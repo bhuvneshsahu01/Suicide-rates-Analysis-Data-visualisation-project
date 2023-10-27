@@ -1,0 +1,424 @@
+---
+title: '**Global Suicide Trends and Analysis**'
+author: '**Bhuvnesh Sahu**'
+date: "30/09/2023"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+```{r setup, include=FALSE,echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+\begin{centering}
+\large
+Roll No: MDS202316
+
+\large
+DG1107: Visualization
+
+\large
+Email: \href{mailto:bhuvnesh.mds2023@cmi.ac.in}{bhuvnesh.mds2023@cmi.ac.in}
+
+\large
+Chennai Mathematical Institute
+
+\end{centering}
+
+\newpage
+
+\begin{centering}
+
+\vspace*{1cm}
+
+\end{centering}
+
+\vspace{0.3cm}
+
+
+\vspace*{1cm}
+
+\renewcommand{\contentsname}{Table of Contents}
+
+\renewcommand{\baselinestretch}{2.0}\normalsize
+\tableofcontents
+\renewcommand{\baselinestretch}{1.0}\normalsize
+
+
+\newpage
+
+
+
+## **Introduction**
+Suicide is a serious problem that affects people all around the world, no matter where they live or who they are. Our project focuses on studying trends related to suicide on a global scale. We aim to analyze and understand the patterns and changes in suicide rates over time and across different regions. By examining these trends, we can gain valuable insights into how suicide rates are evolving worldwide.
+
+Our goal is not to provide solutions but rather to provide a clear picture of how suicide rates have been changing and if there are any noticeable patterns or shifts.
+
+
+
+
+```{r message = FALSE, warning = FALSE,echo=FALSE}
+library(tidyverse)
+library(dplyr)
+library(countrycode)
+library(broom)
+library(gridExtra)
+```
+
+
+## **Data Description**
+The dataset used in this project is sourced from the World Health Organization (WHO) and spans a comprehensive 30-year period, encompassing data from numerous countries across the globe. This rich dataset provides valuable insights into various aspects related to suicides and serves as a foundation for an in-depth analysis. It comprises 12 distinct variables, each with a total of 27,000 entries, representing data points from 100 countries worldwide. Below, we provide a brief overview of these variables:
+
+**Country:** The country or region ,where the data was collected. There are total 100 countries.
+
+**Year:** The year in which the data was recorded, covering a 30-year time span.
+
+**Sex:** The gender of the individuals being studied, categorized as male or female.
+
+**Age:** The age groups of individuals involved, allowing for age-specific analysis.
+
+**Suicides Number:** The total number of suicides reported in a specific category (e.g., country, year, sex, age).
+
+**Population:** The population count within the specified category.
+
+**Suicides/100k:** The suicide rate per 100,000 population, providing a standardized measure for comparison.
+
+**HDI for Year:** The Human Development Index (HDI) for the respective year, which assesses the overall development status of a country.
+
+**GDP for Year:** The Gross Domestic Product (GDP) for the specified year, serving as an economic indicator.
+
+**GDP Per Capita ($):** The GDP per capita, calculated by dividing the GDP by the population, indicating the economic well-being of a nation's citizens.
+
+**Generation:** The generational cohort to which individuals belong, offering insights into generational trends.
+
+```{r message=FALSE,warning=FALSE,echo=FALSE}
+data <- read_csv("C:\\Users\\Bhuvnesh's PC\\Downloads\\master\\master.csv")
+data <- data %>% 
+  select(-c(`HDI for year`, `suicides/100k pop`)) %>%
+  rename(gdp_for_year = `gdp_for_year ($)`, 
+         gdp_per_capita = `gdp_per_capita ($)`, 
+         country_year = `country-year`) %>%
+  as.data.frame()
+data <- data %>%
+  filter(year != 2016) %>% 
+  select(-country_year)
+minimum_years <- data %>%
+  group_by(country) %>%
+  summarize(rows = n(), 
+            years = rows / 12) %>%
+  arrange(years)
+data <- data %>%
+  filter(!(country %in% head(minimum_years$country, 7)))
+data$age <- gsub(" years", "", data$age)
+data$sex <- ifelse(data$sex == "male", "Male", "Female")
+
+
+# getting continent data:
+data$continent <- countrycode(sourcevar = data[, "country"],
+                              origin = "country.name",
+                              destination = "continent")
+
+# Nominal factors
+data_nominal <- c('country', 'sex', 'continent')
+data[data_nominal] <- lapply(data[data_nominal], function(x){factor(x)})
+
+
+# Making age ordinal
+data$age <- factor(data$age, 
+                   ordered = T, 
+                   levels = c("5-14",
+                              "15-24", 
+                              "25-34", 
+                              "35-54", 
+                              "55-74", 
+                              "75+"))
+
+# Making generation ordinal
+data$generation <- factor(data$generation, 
+                   ordered = T, 
+                   levels = c("G.I. Generation", 
+                              "Silent",
+                              "Boomers", 
+                              "Generation X", 
+                              "Millenials", 
+                              "Generation Z"))
+
+data <- as_tibble(data)
+# the global rate over the time period will be useful:
+
+global_average <- (sum(as.numeric(data$suicides_no)) / sum(as.numeric(data$population))) * 100000
+```
+
+## **Questions, we will try to answer**
+* Suicide trend all over the world over the span of 30 years .
+* Are there any effect of different variables, like age,per capita gdp of country,sex, on No. of suicides.
+* are suicide rates different in different regions of the world.
+* are the suicide rates are same for both genders or there is any difference.
+
+
+\newpage
+
+
+## **Exploratory Data Analysis**
+
+### **Global Trend**
+
+```{r message=FALSE,warning=FALSE,echo=FALSE}
+theme <- theme(text = element_text(family = "serif", size = 12),legend.position = "none")
+data %>%
+  group_by(year) %>%
+  summarize(population = sum(population), 
+            suicides = sum(suicides_no), 
+            suicides_per_100k = (suicides / population) * 100000) %>%
+  ggplot(aes(x = year, y = suicides_per_100k)) + 
+  geom_line(col = "#DF536B", size = 1) + 
+  geom_point(col = "#12a4d9", size = 2) + 
+  geom_hline(yintercept = global_average, linetype = 2, color = "grey40", size = 1) +
+  labs(
+       subtitle = "Trend over time, 1985 - 2015.",
+       x = "Year", 
+       y = "Suicides per 100k") + 
+  scale_x_continuous(breaks = seq(1985, 2015, 2)) + 
+  scale_y_continuous(breaks = seq(10, 20)) + theme +
+  annotate("text", x = 2001, y = 12.5, label = "Global Average", vjust = 1, size = 3, color = "grey40") +
+  annotate(
+    "curve",
+    x = 2003, y = 12.5,
+    xend = 2003, yend = 13.1,
+    arrow = arrow(length = unit(0.2, "cm"), type = "closed"),
+    color = "grey40"
+  )
+```
+            The dashed line is the **global average suicide rate** from 1985 - 2015.
+
+ ***Insights***
+
+* Peak suicide rate was **15.3** deaths per 100k in **1995**.
+* Suicide rates have decreased steadily, to **11.5** per 100k in **2015** (**~25% decrease**).
+* Suicide rates were very high in 1990's and early 2000's.
+* Rates have returned to their pre-90's rates in 2010-2015.
+
+\newpage
+
+### **By Continent**
+```{r fig.width = 6, fig.height = 7,message=FALSE,echo=FALSE}
+continent <- data %>%
+  group_by(continent) %>%
+  summarize(suicide_per_100k = (sum(as.numeric(suicides_no)) / sum(as.numeric(population))) * 100000) %>%
+  arrange(suicide_per_100k)
+
+continent$continent <- factor(continent$continent, ordered = T, levels = continent$continent)
+
+continent_plot <- ggplot(continent, aes(x = continent, y = suicide_per_100k, fill = continent)) + 
+  geom_bar(stat = "identity") + 
+  labs(title = "continental Suicides (per 100k)",
+  x = "Continent", 
+  y = "Suicides per 100k", 
+  fill = "Continent") +
+  theme(legend.position = "none", title = element_text(size = 10)) + 
+  scale_y_continuous(breaks = seq(0,20,1), minor_breaks = F)
+continent_time <- data %>%
+  group_by(year, continent) %>%
+  summarize(suicide_per_100k = (sum(as.numeric(suicides_no)) / sum(as.numeric(population))) * 100000)
+
+continent_time$continent <- factor(continent_time$continent, ordered = T, levels = continent$continent)
+
+continent_time_plot <- ggplot(continent_time, aes(x = year, y = suicide_per_100k, col = factor(continent))) + 
+  facet_grid(continent ~ ., scales = "free_y") + 
+  geom_line() + 
+  geom_point() + 
+  labs(title = "Trends Over Time", 
+       x = "Year", 
+       y = "Suicides per 100k", 
+       color = "Continent") + 
+  theme(legend.position = "none", title = element_text(size = 10)) + 
+  scale_x_continuous(breaks = seq(1985, 2015, 5), minor_breaks = F)
+
+grid.arrange(continent_plot, continent_time_plot, ncol = 1)
+```
+
+***Insights***
+
+* **European rate highest overall**, but has steadily **decreased ~40% since 1995**
+* The **European rate for 2015 similar to Asia & Oceania**
+* The trendline for Africa is due to poor data quality of data provided.
+* **Oceania & Americas trends are more concerning**
+
+\newpage
+
+
+### **By Sex**
+```{r fig.width = 8, fig.height = 4.5,message=FALSE,,echo=FALSE}
+sex_plot <- data %>%
+  group_by(sex) %>%
+  summarize(suicide_per_100k = (sum(as.numeric(suicides_no)) / sum(as.numeric(population))) * 100000) %>%
+ggplot(aes(x = sex, y = suicide_per_100k, fill = sex)) + 
+  geom_bar(stat = "identity") + 
+  labs(title = "Global suicides (per 100k)",
+       x = "Sex", 
+       y = "Suicides per 100k") +
+  theme(legend.position = "none") + 
+  scale_y_continuous(breaks = seq(0, 25), minor_breaks = F)
+
+### with time
+sex_time_plot <- data %>%
+  group_by(year, sex) %>%
+  summarize(suicide_per_100k = (sum(as.numeric(suicides_no)) / sum(as.numeric(population))) * 100000) %>%
+  ggplot(aes(x = year, y = suicide_per_100k, col = factor(sex))) + 
+  facet_grid(sex ~ ., scales = "free_y") + 
+  geom_line() + 
+  geom_point() + 
+  labs(title = "Trends Over Time, by Sex", 
+       x = "Year", 
+       y = "Suicides per 100k", 
+       color = "Sex") + 
+  theme(legend.position = "none") + 
+  scale_x_continuous(breaks = seq(1985, 2015, 5), minor_breaks = F)
+
+grid.arrange(sex_plot, sex_time_plot, ncol = 2)
+age_sex_trendplot <- data %>% group_by(year,age,sex) %>% summarise(suicides_100kpop = mean(suicides_no*100000/population)) %>% ggplot(aes(x = year, y = suicides_100kpop,col = sex))+
+geom_line(size = 0.8)+geom_point(size=1.5)+scale_x_continuous(breaks = seq(1985, 2015,2))+theme(axis.text.x = element_text(angle = 90,hjust = 1))+facet_grid(age~.)
+age_sex_trendplot
+```
+
+***Insights***
+
+* Globally, the rate of suicide for men has been **~3.5x higher ** than that of women.
+* Both **male & female suicide rates peaked in 1995**, declining since.
+* This ratio of 3.5 : 1 (male : female) has remained relatively constant since the mid 90's
+* there are incidences of **child** suicides aged between 5-14
+
+\newpage
+
+### **By Age**
+
+```{r fig.width = 6, fig.height = 7,message=FALSE,warning=FALSE,echo=FALSE}
+age_plot <- data %>%
+  group_by(age) %>%
+  summarize(suicide_per_100k = (sum(as.numeric(suicides_no)) / sum(as.numeric(population))) * 100000) %>%
+  ggplot(aes(x = age, y = suicide_per_100k, fill = age)) + 
+  geom_bar(stat = "identity") + 
+  labs(title = "Global suicides per 100k",
+       x = "Age", 
+       y = "Suicides per 100k") +
+  theme(legend.position = "none") + 
+  scale_y_continuous(breaks = seq(0, 30, 1), minor_breaks = F)
+age_time_plot <- data %>%
+  group_by(year, age) %>%
+  summarize(suicide_per_100k = (sum(as.numeric(suicides_no)) / sum(as.numeric(population))) * 100000) %>%
+  ggplot(aes(x = year, y = suicide_per_100k, col = age)) + 
+  facet_grid(age ~ ., scales = "free_y") + 
+  geom_line() + 
+  geom_point() + 
+  labs(title = "Trends Over Time", 
+       x = "Year", 
+       y = "Suicides per 100k", 
+       color = "Age") + 
+  theme(legend.position = "none") + 
+  scale_x_continuous(breaks = seq(1985, 2015, 5), minor_breaks = F)
+
+
+grid.arrange(age_plot, age_time_plot, ncol = 1)
+```
+
+***Insights***
+
+* Globally there is a positive correlation between sage and suicide rates
+* Since 1995, suicide rate for everyone aged **>= 15** has been decreasing.
+* The suicide rate of those aged **75+** has dropped since 1990
+* Suicide rate in the **'5-14'** category remains **roughly static** and small.
+
+\newpage
+
+### **By Country**
+```{r fig.width = 8, fig.height = 9.5,warning=FALSE,echo=FALSE}
+country <- data %>%
+  group_by(country, continent) %>%
+  summarize(n = n(), 
+            suicide_per_100k = (sum(as.numeric(suicides_no)) / sum(as.numeric(population))) * 100000,.groups = "drop") %>%
+  arrange(desc(suicide_per_100k))
+
+country$country <- factor(country$country, 
+                          ordered = T, 
+                          levels = rev(country$country))
+
+ggplot(country, aes(x = country, y = suicide_per_100k, fill = continent)) + 
+  geom_bar(stat = "identity") +
+  geom_hline(yintercept = global_average, linetype = 2, color = "grey35", size = 1) +
+  labs(title = "Global suicides per 100k",
+       x = "Country", 
+       y = "Suicides per 100k", 
+       fill = "Continent") +
+  coord_flip() +
+  scale_y_continuous(breaks = seq(0, 45, 2)) + 
+  theme(legend.position ='right')
+```
+
+***Insights***
+
+* Lithuania's suicide rate has been highest by a large margin: > 41 suicides per 100k (per year).
+* A lot of **European Countrires** are in have high suicide rates.
+
+\newpage
+
+### **Correlation with Per Capita GDP**
+
+```{r fig.width = 7, fig.height = 3.9,echo = FALSE,message=FALSE,warning=FALSE}
+
+  country_mean_gdp <- data %>%
+    group_by(country, continent) %>%
+    summarize(suicide_per_100k = (sum(as.numeric(suicides_no)) / sum(as.numeric(population))) * 100000, 
+              gdp_per_capita = mean(gdp_per_capita),.groups = 'drop')
+  
+  ggplot(data = country_mean_gdp, aes(x = gdp_per_capita, y = suicide_per_100k, col = continent)) + 
+    geom_point() + 
+    scale_x_continuous(labels=scales::dollar_format(prefix="$"), breaks = seq(0, 70000, 10000)) + 
+    labs(
+         x = "GDP (per capita)", 
+         y = "Suicides per 100k", 
+         col = "Continent") +
+    theme(text = element_text(family = "serif", size = 12))
+
+```
+
+***Insights***
+
+* There is weak positive correlation.
+* we can see most of the suicides are concentrated in low gdp per capita income contries.
+
+```{r fig.width = 7, fig.height = 3.7, message=FALSE,warning=FALSE,echo=FALSE}
+data %>%
+  group_by(continent, sex) %>%
+  summarize(n = n(), 
+            suicides = sum(as.numeric(suicides_no)), 
+            population = sum(as.numeric(population)), 
+            suicide_per_100k = (suicides / population) * 100000) %>%
+  ggplot(aes(x = continent, y = suicide_per_100k, fill = sex)) + 
+  geom_bar(stat = "identity", position = "dodge") + 
+  geom_hline(yintercept = global_average, linetype = 2, color = "grey35", size = 2) +
+  labs(title = "Gender Disparity, by Continent",
+       x = "Continent", 
+       y = "Suicides per 100k", 
+       fill = "Sex") +
+  coord_flip()
+```
+***insights***
+
+* Suicide rate of males is greter than females in every continent.
+* In Europe male suicide rate is 3.5x of female suicide rate.
+
+\newpage
+
+## **Results**
+* Suicide rates are decreasing globally after a spike in 1995.
+* On average, suicide rate increases with age.
+* **European men** were at the **highest risk** between 1985 - 2015, at ~ 30 suicides (per 100k, per year)
+* Suicide rates are **decreasing globally**.
+* On average, **suicide rate increases with age.**
+* There is a *weak* **positive relationship between a countries GDP (per capita) and suicide rate**.
+* There is an **overrepresentation of men** in suicide deaths at every level of analysis (globally, at a continent and country level).
+* Globally the male rate is *~3.5x* higher than that of women.
+
+## ***Conclusion***
+After a comprehensive analysis of the data and all graphs, key trends have emerged. Suicide rates exhibited an upward trajectory until 1995, followed by a decline after reaching a peak in that year. Age consistently correlated with higher suicide rates across all countries. European men faced the highest risk, necessitating region-specific mental health initiatives. While GDP per capita displayed a weak positive correlation with suicide rates. Most concerning was the persistent overrepresentation of men in suicide deaths, with global male rates roughly 3.5 times higher than those of women.There is less representation of african countries. Suicide rates are highest for the age group 75+. Overall, our analysis provides a comprehensive view of global suicide trends, guiding evidence-based strategies for suicide prevention and mental health support worldwide.
+
